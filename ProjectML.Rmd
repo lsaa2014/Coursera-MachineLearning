@@ -1,0 +1,97 @@
+---
+title: "Machine Learning Writeup"
+author: "DanLau"
+date: "Saturday, April 25, 2015"
+output: html_document
+---
+
+Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here:
+<http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). 
+The goal is to build a machine learning algorithm to predict activity quality from activity monitors
+
+We first load the library we will need and the dataset.
+
+## Loading the library and the dataset
+```{r}
+library(caret); library(randomForest);library(e1071)
+training_url<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
+To begin, we read and cleanup the training and testing dataset in order to remove variables that are not useful.
+
+## Read and cleanup the data
+```{r, echo=TRUE}
+test<-read.csv(test_url,header = TRUE, as.is = TRUE, na.strings=c("NA",""))
+train <- read.csv(training_url, header = TRUE, as.is = TRUE, na.strings=c("", "NA"))
+names(train); dim(train)
+## remove columns is simply an index, timestamp or username and also with blank and NAs
+train <- train[,-c(1:7)]
+test <- test[,-c(1:7)]
+test <- test[,colSums(is.na(test)) == 0]; dim(test); head(test) 
+train <- train[,colSums(is.na(train)) == 0]; dim(train) 
+head(train)
+## the variable "classe is our outcome so we convert it into factor
+class(train$classe)
+train$classe <- as.factor(train$classe) 
+```
+
+## Cross validation and splitting tha data into 65% training and 35% testing set
+```{r, echo=TRUE}
+set.seed(22344)
+setTrain <- createDataPartition(y = train$classe, p = 0.65, list = FALSE)
+trainPml <- train[setTrain,]
+testPml <- train[-setTrain,]
+dim(trainPml); dim(testPml)
+```
+
+For the prediction models I will use the random forest and naive bayes model.
+
+## Random Forest model
+```{r, echo=TRUE}
+modPmlRf<- randomForest(classe ~. , data = trainPml)
+print(modPmlRf)
+## To summarize the model we use the confusion matrix on the training and testing set
+## In-sample accuracy
+confusionMatrix(predict(modPmlRf, trainPml), trainPml$classe)
+## Out-sample accuracy
+confusionMatrix(predict(modPmlRf, testPml), testPml$classe)
+```
+The in sample accuracy is 100 % which indicates, the model is quite good.
+The cross validation accuracy is 99%, meaning that our model is constant and can be sufficient for predicting the twenty test observations. Based on the lower bound of the confidence interval we would expect to achieve a 99.22% of accuracy for the classification of the data provided.
+
+## Naive bayes model
+```{r, echo=TRUE}
+modPmlNb <- naiveBayes(classe ~. , data = trainPml)
+print(modPmlNb)
+## Summarize the results
+## In-sample accuracy
+confusionMatrix(predict(modPmlNb, newdata = trainPml), trainPml$classe)
+## Out-sample accuracy
+confusionMatrix(predict(modPmlNb, newdata = testPml), testPml$classe)
+```
+The in sample accuracy is 56 % which indicates that random forest is the best the model for these data.
+
+```{r, echo=TRUE}
+## We can plot the variable importance from the random forest
+varImpPlot(modPmlRf)
+```
+
+## Prediction of Test set provided
+```{r, echo=TRUE}
+answers = predict(modPmlRf, test)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
+
+## Conclusion
+To conclude we can say that weight lifting style can be well predicted as measured with accelerometers and the roll belt are the is the most important to quantify the impact of the classe variable.
+
